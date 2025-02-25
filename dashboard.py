@@ -9,7 +9,7 @@ import google.generativeai as genai
 
 # Configure the Gemini API
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
-genai.configure(api_key="AIzaSyDLYLeBQCTzYreNSJGwP10Sr85hQ1fmg38")
+genai.configure(api_key=" ")
 # Create the model configuration
 generation_config = {
     "temperature": 0.9,
