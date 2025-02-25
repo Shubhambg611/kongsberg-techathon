@@ -3,8 +3,26 @@ import pandas as pd
 import joblib
 import requests
 from datetime import datetime
+import os
+from google.cloud import aiplatform
+import google.generativeai as genai
 
-@st.cache_data
+# Configure the Gemini API
+genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+genai.configure(api_key="AIzaSyDLYLeBQCTzYreNSJGwP10Sr85hQ1fmg38")
+# Create the model configuration
+generation_config = {
+    "temperature": 0.9,
+    "top_p": 1,
+    "max_output_tokens": 2048,
+    "response_mime_type": "text/plain",
+}
+
+model = genai.GenerativeModel(
+    model_name="gemini-1.0-pro",
+    generation_config=generation_config,
+)
+
 def load_model(model_path):
     try:
         return joblib.load(model_path)
@@ -12,9 +30,8 @@ def load_model(model_path):
         st.error(f"Error loading model: {e}")
         return None
 
-@st.cache_data
 def fetch_weather_data():
-    api_key = '0c874012f39542739e4f812b3de29c53'
+    api_key = '1f11388f3eba4d47828231e9877c4c7f'
     location = 'Mumbai'
     url = f"https://api.weatherbit.io/v2.0/current?city={location}&key={api_key}&units=M"
 
@@ -29,7 +46,7 @@ def fetch_weather_data():
             humidity = weather.get('rh', 0)
             wind_speed = weather.get('wind_spd', 0)
             precipitation = weather.get('precip', 0)
-            solar_radiation = weather.get('solar_rad', 800)  # Fetch solar radiation if available
+            solar_radiation = weather.get('solar_rad', 800)
             return outdoor_temp, humidity, wind_speed, solar_radiation, precipitation
         else:
             st.error("Weather data could not be retrieved. Please check the API response.")
@@ -57,7 +74,7 @@ def predict_energy_consumption(model, outdoor_temp, humidity, building_size, sol
         return None
 
 def predict_monthly_consumption():
-    model = load_model('xgboost_model.pkl')
+    model = load_model('/mnt/A42AC5272AC4F778/Kongsberg/xgboost_model.pkl')
     if model is None:
         return "Model is not available."
 
@@ -85,7 +102,7 @@ def predict_monthly_consumption():
         return "Prediction could not be made."
 
 def predict_solar_energy(outdoor_temp, solar_rad):
-    model_path = 'D:/Kongsburg/solar_generation_model.pkl'
+    model_path = '/mnt/A42AC5272AC4F778/Kongsberg/solar_generation_model.pkl'
     rf_model = load_model(model_path)
     if rf_model is None:
         return "Solar generation model is not available."
@@ -116,12 +133,12 @@ def perform_daily_calculation():
     st.write(f"Solar Radiation: {solar_radiation} W/m²")
     st.write(f"Precipitation: {precipitation} mm")
 
-    energy_model = load_model('energy_consumption_model.pkl')
+    energy_model = load_model('/mnt/A42AC5272AC4F778/Kongsberg/energy_consumption_model.pkl')
     if energy_model is None:
         st.write("Energy consumption model is not available. Returning to main page.")
         return
 
-    solar_model = load_model('D:/Kongsburg/solar_generation_model.pkl')
+    solar_model = load_model('/mnt/A42AC5272AC4F778/Kongsberg/solar_generation_model.pkl')
     if solar_model is None:
         st.write("Solar generation model is not available. Returning to main page.")
         return
@@ -134,7 +151,7 @@ def perform_daily_calculation():
     
     if energy_consumption is not None and solar_generation is not None:
         st.session_state.result = (f'Estimated Total Energy Consumption for Tomorrow: {energy_consumption:.2f} kWh\n'
-                                   f'Predicted Daily Solar Energy Generation: {solar_generation} kWh')
+                                   f'\nPredicted Daily Solar Energy Generation: {solar_generation} kWh')
     else:
         st.session_state.result = "Prediction could not be made."
 
@@ -147,7 +164,7 @@ def optimize_thermostat():
     solar_radiation = st.number_input('Solar Radiation (W/m²)', value=150)
 
     if st.button("Optimize Thermostat Setting"):
-        model_path = 'thermostat_model.pkl'
+        model_path = '/mnt/A42AC5272AC4F778/Kongsberg/thermostat_model.pkl'
         thermostat_model = load_model(model_path)
         if thermostat_model is None:
             st.write("Thermostat optimization model is not available.")
@@ -177,7 +194,7 @@ def show_predictive_maintenance():
     st.title("Machine Predictive Maintenance Classification")
 
     # Load the predictive maintenance model
-    rfc = load_model('model.joblib')
+    rfc = load_model('/mnt/A42AC5272AC4F778/Kongsberg/Predictive maintainance/model.joblib')
     if rfc is None:
         st.write("Predictive maintenance model is not available.")
         return
@@ -218,61 +235,99 @@ def show_predictive_maintenance():
             st.error(f"Error making prediction: {e}")
             failure_pred = "Prediction could not be made."
 
-    st.success(failure_pred)
+    st.subheader("Prediction Result")
+    st.write(f"Predicted Failure: {failure_pred}")
 
-def main():
-    if 'page' not in st.session_state:
-        st.session_state.page = "Home"
-    if 'result' not in st.session_state:
-        st.session_state.result = None
+def display_energy_saving_recommendations():
+    st.title("Energy Saving Recommendations")
 
-    st.title("Energy Management Dashboard")
+    # Create the chat session
+    chat_session = model.start_chat(
+        history=[
+            {
+                "role": "user",
+                "parts": [
+                    "Energy Saving Recommendations",
+                ],
+            },
+            {
+                "role": "model",
+                "parts": [
+                    "*Lighting:\n\n Install energy-efficient LED or CFL bulbs to replace incandescent bulbs.\n* Use natural sunlight whenever possible by opening curtains and blinds.\n* Install motion sensors or timers in areas that receive minimal use.\n* Replace old light fixtures with energy-star rated models.\n\n*Heating and Cooling:\n\n Set the thermostat to a reasonable temperature (78°F in summer, 68°F in winter).\n* Use a programmable thermostat to adjust the temperature automatically when not home.\n* Seal air leaks around windows, doors, and vents.\n* Consider installing a heat pump or geothermal system for efficient heating and cooling.\n\n*Appliances:\n\n Choose energy-star rated appliances when replacing old ones.\n* Unplug unused appliances and electronics to prevent standby power consumption.\n* Wash clothes in cold water and air-dry.\n* Replace old refrigerators with energy-efficient models.\n\n*Water Heating:\n\n Install a low-flow showerhead and faucet aerators to reduce water usage.\n* Insulate your water heater and pipes to minimize heat loss.\n* Consider installing a solar water heater.\n\n*Other Measures:\n\n Install ceiling fans to circulate air and reduce cooling costs.\n* Use dehumidifiers to reduce moisture in the air and make your home feel cooler.\n* Plant trees around your home to provide shade and reduce cooling demand.\n* Regularly inspect and maintain your HVAC system to ensure optimal efficiency.\n* Consider using renewable energy sources such as solar panels or wind turbines.\n\n*Habits and Mindset:\n\n Turn off lights when leaving a room.\n* Unplug chargers and devices when not in use.\n* Use public transportation, walk, or bike instead of driving whenever possible.\n* Be conscious of your energy consumption and make small changes to reduce it.\n\n*Additional Tips:\n\n Conduct an energy audit to identify areas for improvement.\n* Take advantage of rebates and incentives offered by utilities.\n* Consider hiring a professional to install energy-efficient upgrades.\n* Stay informed about new technologies and advancements in energy efficiency.",
+                ],
+            },
+        ]
+    )
 
-    st.sidebar.title("Menu")
-    page = st.sidebar.radio("Select a Page", ["Home", "Daily Consumption", "Monthly Prediction", "Solar Prediction", "Thermostat Optimization", "Predictive Maintenance"])
+    # Display the initial recommendations
+    st.write("*Energy Saving Recommendations*")
+    st.write("Lighting:\n\n Install energy-efficient LED or CFL bulbs to replace incandescent bulbs.\n* Use natural sunlight whenever possible by opening curtains and blinds.\n* Install motion sensors or timers in areas that receive minimal use.\n* Replace old light fixtures with energy-star rated models.\n\n*Heating and Cooling:\n\n Set the thermostat to a reasonable temperature (78°F in summer, 68°F in winter).\n* Use a programmable thermostat to adjust the temperature automatically when not home.\n* Seal air leaks around windows, doors, and vents.\n* Consider installing a heat pump or geothermal system for efficient heating and cooling.\n\n*Appliances:\n\n Choose energy-star rated appliances when replacing old ones.\n* Unplug unused appliances and electronics to prevent standby power consumption.\n* Wash clothes in cold water and air-dry.\n* Replace old refrigerators with energy-efficient models.\n\n*Water Heating:\n\n Install a low-flow showerhead and faucet aerators to reduce water usage.\n* Insulate your water heater and pipes to minimize heat loss.\n* Consider installing a solar water heater.\n\n*Other Measures:\n\n Install ceiling fans to circulate air and reduce cooling costs.\n* Use dehumidifiers to reduce moisture in the air and make your home feel cooler.\n* Plant trees around your home to provide shade and reduce cooling demand.\n* Regularly inspect and maintain your HVAC system to ensure optimal efficiency.\n* Consider using renewable energy sources such as solar panels or wind turbines.\n\n*Habits and Mindset:\n\n Turn off lights when leaving a room.\n* Unplug chargers and devices when not in use.\n* Use public transportation, walk, or bike instead of driving whenever possible.\n* Be conscious of your energy consumption and make small changes to reduce it.\n\n*Additional Tips:\n\n Conduct an energy audit to identify areas for improvement.\n* Take advantage of rebates and incentives offered by utilities.\n* Consider hiring a professional to install energy-efficient upgrades.\n* Stay informed about new technologies and advancements in energy efficiency.")
+    st.write("Feel free to ask any questions about energy saving tips.")
 
-    st.session_state.page = page
+    # Text input for user questions
+    user_input = st.text_input("Ask a question about energy saving:")
 
-    if st.session_state.page == "Home":
-        st.subheader("Home")
-        st.write("Welcome to the Energy Management Dashboard. Use the sidebar to navigate.")
+    if st.button("Send"):
+        if user_input:
+            # Send the user's message and get the response
+            response = chat_session.send_message(user_input)
+            st.write("*Response:*")
+            st.write(response.text)
+        else:
+            st.write("Please enter a question.")
+# Sidebar for navigation
+st.sidebar.title("Navigation")
+page = st.sidebar.radio("Select a Page", ["Home", "Daily Consumption", "Monthly Prediction", "Solar Prediction", "Thermostat Optimization", "Predictive Maintenance", "Energy Saving Recommendations"])
 
-    elif st.session_state.page == "Daily Consumption":
-        st.subheader("Daily Consumption Prediction")
-        if st.button("Calculate Daily Consumption"):
-            perform_daily_calculation()
+st.session_state.page = page
 
-    elif st.session_state.page == "Monthly Prediction":
-        st.subheader("Monthly Energy Prediction")
-        if st.button("Predict Monthly Energy Consumption"):
-            result = predict_monthly_consumption()
-            st.session_state.result = result
+if st.session_state.page == "Home":
+    st.subheader("Home")
+    st.write("Welcome to the Energy Management Dashboard. Use the sidebar to navigate.")
+    st.image("/mnt/A42AC5272AC4F778/Kongsberg/img.jpg", use_column_width=False,)
+    st.write("""
+        This project aims to provide an integrated solution for managing energy consumption in buildings.
+        The dashboard offers several functionalities, including predicting daily and monthly energy usage, optimizing thermostat settings,
+        forecasting solar energy generation, and providing energy-saving recommendations. It leverages various data inputs, such as weather
+        conditions and building specifications, to help you make informed decisions on energy management and sustainability efforts.
+        """)
 
-    elif st.session_state.page == "Solar Prediction":
-        st.subheader("Daily Solar Energy Prediction")
-        outdoor_temp, _, _, solar_radiation, _ = fetch_weather_data()
+elif st.session_state.page == "Daily Consumption":
+    st.subheader("Daily Consumption Prediction")
+    if st.button("Calculate Daily Consumption"):
+        perform_daily_calculation()
 
-        st.write("Fetched Weather Data")
-        st.write(f"Temperature: {outdoor_temp}°C")
-        st.write(f"Solar Radiation: {solar_radiation} W/m²")
+elif st.session_state.page == "Monthly Prediction":
+    st.subheader("Monthly Energy Prediction")
+    if st.button("Predict Monthly Energy Consumption"):
+        result = predict_monthly_consumption()
+        st.session_state.result = result
 
-        if st.button("Predict Daily Solar Energy Generation"):
-            prediction = predict_solar_energy(outdoor_temp, solar_radiation)
-            if prediction is not None:
-                st.session_state.result = f'Predicted Daily Solar Energy Generation: {prediction} kWh'
-            else:
-                st.session_state.result = "Prediction could not be made."
+elif st.session_state.page == "Solar Prediction":
+    st.subheader("Daily Solar Energy Prediction")
+    outdoor_temp, _, _, solar_radiation, _ = fetch_weather_data()
 
-    elif st.session_state.page == "Thermostat Optimization":
-        optimize_thermostat()
+    st.write("Fetched Weather Data")
+    st.write(f"Temperature: {outdoor_temp}°C")
+    st.write(f"Solar Radiation: {solar_radiation} W/m²")
 
-    elif st.session_state.page == "Predictive Maintenance":
-        show_predictive_maintenance()
+    if st.button("Predict Daily Solar Energy Generation"):
+        prediction = predict_solar_energy(outdoor_temp, solar_radiation)
+        if prediction is not None:
+            st.session_state.result = f'Predicted Daily Solar Energy Generation: {prediction} kWh'
+        else:
+            st.session_state.result = "Prediction could not be made."
 
-    if st.session_state.result:
-        st.subheader("Result")
-        st.write(st.session_state.result)
-        st.session_state.result = None
+elif st.session_state.page == "Thermostat Optimization":
+    optimize_thermostat()
 
-if __name__== "__main__":
-    main()
+elif st.session_state.page == "Predictive Maintenance":
+    show_predictive_maintenance()
+    
+elif st.session_state.page == "Energy Saving Recommendations":
+    display_energy_saving_recommendations()
+
+if st.session_state.result:
+    st.subheader("Result")
+    st.write(st.session_state.result)
+    st.session_state.result = None
